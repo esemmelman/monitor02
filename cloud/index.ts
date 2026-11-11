@@ -5,6 +5,8 @@ const recipient='esemmoc@gmail.com';
 const allowedOrigins=new Set(['https://esemmelman.github.io','http://127.0.0.1:8787','http://localhost:8787']);
 const cors={'Access-Control-Allow-Origin':'https://esemmelman.github.io','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, GET, OPTIONS','Vary':'Origin'};
 const emailConfigured=()=>Boolean(Deno.env.get('RESEND_API_KEY')&&Deno.env.get('REMINDER_EMAIL_FROM'));
+// Override only this monitor's display name; preserve the shared verified sender address.
+const senderAddress=()=>{const configured=Deno.env.get('REMINDER_EMAIL_FROM')||'';return configured.match(/<([^<>]+)>/)?.[1]?.trim()||configured.trim();};
 async function getJson(url:string){
  const options={headers:{'User-Agent':'Mozilla/5.0','Accept':'application/json'},signal:AbortSignal.timeout(10000)};
  let response=await fetch(url,options);
@@ -77,7 +79,7 @@ Deno.serve(async(request:Request)=>{
   await persist();
   for(const email of state.outbox.slice(0,2)){
    try{
-    const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(10000),headers:{Authorization:`Bearer ${Deno.env.get('RESEND_API_KEY')}`,'Content-Type':'application/json','Idempotency-Key':`monitor02:${owner}:${email.id}`},body:JSON.stringify({from:Deno.env.get('REMINDER_EMAIL_FROM'),to:[recipient],subject:email.subject,text:email.text})});
+    const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(10000),headers:{Authorization:`Bearer ${Deno.env.get('RESEND_API_KEY')}`,'Content-Type':'application/json','Idempotency-Key':`monitor02:${owner}:${email.id}`},body:JSON.stringify({from:`Temp <${senderAddress()}>`,to:[recipient],subject:email.subject,text:email.text})});
     if(!response.ok){const details=await response.json().catch(()=>({}));throw Error(`Email provider ${response.status}: ${details.message||'delivery failed'}`);}
     const result=await response.json();
     state.sent.unshift({id:email.id,subject:email.subject,time:new Date().toISOString(),providerId:result.id});
