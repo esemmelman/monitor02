@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {initialState,recordWeather,recordGame,checkFeeds} from './core.mjs';
 const time=new Date('2026-11-11T18:00:00Z');
 const weather=(temp,t='2026-11-11T10:00')=>({current:{temperature_2m:temp,time:t}});
+test('decimal changes are ignored, whole-number boundaries alert in either direction',()=>{
+ const s=initialState();recordWeather(s,weather(55.2),time);
+ recordWeather(s,weather(55.9,'2026-11-11T10:15'),time);assert.equal(s.outbox.length,0);
+ recordWeather(s,weather(56.0,'2026-11-11T10:30'),time);assert.equal(s.outbox.length,1);assert.match(s.outbox[0].text,/55°F to 56°F/);
+ recordWeather(s,weather(55.9,'2026-11-11T10:45'),time);assert.equal(s.outbox.length,2);
+ recordWeather(s,weather(54.9,'2026-11-11T11:00'),time);assert.equal(s.outbox.length,3);
+ assert.equal(s.weather.temp,54);assert(s.history.every(x=>Number.isInteger(x.temp)));assert(s.outbox.every(x=>!/-?\d+\.\d+°F/.test(x.subject+x.text)));
+});
+test('existing decimal baseline and history convert without a false alert',()=>{
+ const s=initialState({day:'2026-11-11',baseline:55.2,weather:{temp:55.2},history:[{sourceTime:'2026-11-11T09:45',temp:55.2}]});
+ recordWeather(s,weather(55.9),time);assert.equal(s.outbox.length,0);assert.equal(s.baseline,55);assert.equal(s.history[0].temp,55);
+ recordWeather(s,weather(54.9,'2026-11-11T10:15'),time);assert.equal(s.outbox.length,1);assert.match(s.outbox[0].text,/55°F to 54°F/);
+});
 test('weather compares to alert baseline, includes full daily history and deduplicates retries',()=>{
  const s=initialState();recordWeather(s,weather(60),time);recordWeather(s,weather(60.5,'2026-11-11T10:15'),time);assert.equal(s.outbox.length,0);
  recordWeather(s,weather(61,'2026-11-11T10:30'),time);assert.equal(s.outbox.length,1);assert.match(s.outbox[0].text,/10:00: 60°F/);assert.match(s.outbox[0].text,/10:30: 61°F/);

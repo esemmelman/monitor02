@@ -2,24 +2,30 @@ import {leaders, completedPeriods} from '../logic.mjs';
 
 export const localDay = date => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 export function initialState(state={}) {
- return {history:[],outbox:[],sent:[],sentIds:[],errors:{},...state};
+ const normalized={history:[],outbox:[],sent:[],sentIds:[],errors:{},...state};
+ if(Number.isFinite(normalized.baseline))normalized.baseline=Math.trunc(normalized.baseline);
+ normalized.history=normalized.history.map(reading=>({...reading,temp:Math.trunc(reading.temp)}));
+ if(normalized.weather)normalized.weather={...normalized.weather,temp:Math.trunc(normalized.weather.temp)};
+ return normalized;
 }
 export function queue(state,id,subject,text,now) {
  if(state.sentIds.includes(id)||state.outbox.some(m=>m.id===id))return;
  state.outbox.push({id,subject,text,created:now.toISOString()});
 }
 export function recordWeather(state,data,now) {
- const temp=data.current?.temperature_2m;
- if(!Number.isFinite(temp)||!data.current?.time)throw Error('Weather feed has no current reading');
+ const reading=data.current?.temperature_2m;
+ if(!Number.isFinite(reading)||!data.current?.time)throw Error('Weather feed has no current reading');
+ const temp=Math.trunc(reading);
  const day=localDay(now);
  if(state.day!==day){state.day=day;state.baseline=null;state.history=[];}
  const sourceTime=data.current.time;
  if(!state.history.some(x=>x.sourceTime===sourceTime))state.history.push({sourceTime,temp});
  state.weather={temp,sourceTime,checked:now.toISOString()};
  if(state.baseline==null)state.baseline=temp;
- if(Math.abs(temp-state.baseline)>=1){
+ state.baseline=Math.trunc(state.baseline);
+ if(temp!==state.baseline){
   queue(state,`weather:${day}:${sourceTime}`,`Huntington Beach: ${temp}°F`,
-   `Huntington Beach 92647 — ${day}\nTemperature changed at least 1°F from ${state.baseline}°F to ${temp}°F.\n\nToday's recorded temperatures since monitoring began (Pacific time):\n`+
+   `Huntington Beach 92647 — ${day}\nWhole-number temperature changed from ${state.baseline}°F to ${temp}°F (decimals dropped).\n\nToday's recorded temperatures since monitoring began (Pacific time):\n`+
    state.history.map(x=>`${x.sourceTime.replace('T',' ')}: ${x.temp}°F`).join('\n')+
    '\n\nSource: Open-Meteo model estimates. Monitor02 checks automatically about once per minute.',now);
   state.baseline=temp;
