@@ -2,6 +2,8 @@
 
 Live dashboard: https://esemmelman.github.io/monitor02/
 
+Temperature emails contain only `The current temperature is 56°`, a blank line, and today's chronological change list such as `6:33 am - 56°`. The list starts with the day's first recorded reading, omits consecutive unchanged temperatures, and uses Pacific observation times (older readings use the provider's Pacific source time). Whole numbers and degree symbols are used throughout.
+
 Background monitoring is enabled. Supabase Cron invokes the monitor every minute, even when the page is closed or your computer is off. Weather continues daily until paused; Lakers alerts apply to the selected game date (initially November 11, 2026), through regulation and overtime. Sign in with your existing DayFlow account to view history, change the game date, send a test email, or pause background monitoring. Signing out does not pause it. No Gmail app password or local service is needed.
 
 The existing DayFlow Resend sender and API credential stay server-side. No plan upgrade or new paid resource was added. Once-per-minute scheduling uses roughly 43,200 Edge Function calls in a 30-day month, plus dashboard requests. Normal Supabase, Resend and weather provider quotas apply; this is shared with other apps in the project. Provider acceptance does not guarantee inbox delivery.

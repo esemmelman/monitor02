@@ -12,6 +12,16 @@ export function queue(state,id,subject,text,now) {
  if(state.sentIds.includes(id)||state.outbox.some(m=>m.id===id))return;
  state.outbox.push({id,subject,text,created:now.toISOString()});
 }
+export function temperatureEmail(temp,history) {
+ const changes=history.filter((reading,index)=>index===0||reading.temp!==history[index-1].temp);
+ const lines=changes.map(reading=>{
+  let time;
+  if(reading.observedAt)time=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit'}).format(new Date(reading.observedAt)).toLowerCase();
+  else{const [hour,minute]=reading.sourceTime.split('T')[1].split(':');const h=Number(hour);time=`${h%12||12}:${minute} ${h<12?'am':'pm'}`;}
+  return `${time} - ${Math.trunc(reading.temp)}°`;
+ });
+ return `The current temperature is ${Math.trunc(temp)}°\n\n${lines.join('\n')}`;
+}
 export function recordWeather(state,data,now) {
  const reading=data.current?.temperature_2m;
  if(!Number.isFinite(reading)||!data.current?.time)throw Error('Weather feed has no current reading');
@@ -19,15 +29,14 @@ export function recordWeather(state,data,now) {
  const day=localDay(now);
  if(state.day!==day){state.day=day;state.baseline=null;state.history=[];}
  const sourceTime=data.current.time;
- if(!state.history.some(x=>x.sourceTime===sourceTime))state.history.push({sourceTime,temp});
+ const last=state.history.at(-1);
+ if(!last||last.sourceTime!==sourceTime||last.temp!==temp)state.history.push({sourceTime,temp,observedAt:now.toISOString()});
  state.weather={temp,sourceTime,checked:now.toISOString()};
  if(state.baseline==null)state.baseline=temp;
  state.baseline=Math.trunc(state.baseline);
  if(temp!==state.baseline){
   queue(state,`weather:${day}:${sourceTime}`,`Huntington Beach: ${temp}°F`,
-   `Huntington Beach 92647 — ${day}\nWhole-number temperature changed from ${state.baseline}°F to ${temp}°F (decimals dropped).\n\nToday's recorded temperatures since monitoring began (Pacific time):\n`+
-   state.history.map(x=>`${x.sourceTime.replace('T',' ')}: ${x.temp}°F`).join('\n')+
-   '\n\nSource: Open-Meteo model estimates. Monitor02 checks automatically about once per minute.',now);
+   temperatureEmail(temp,state.history),now);
   state.baseline=temp;
  }
  state.lastWeather=now.getTime();
