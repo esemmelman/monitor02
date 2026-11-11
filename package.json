@@ -1,1 +1,1 @@
-{"name":"monitor01","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test"},"dependencies":{"nodemailer":"^10.5.0"}}
+{"name":"monitor01","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test"},"dependencies":{"@supabase/supabase-js":"2.119.0"}}
