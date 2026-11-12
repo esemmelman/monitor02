@@ -73,25 +73,50 @@ export function recordGame(state,event,summary,now) {
  }
  state.gameComplete=Boolean(status.type?.completed);
 }
+export async function advanceGame(state,now,getJson) {
+ if(state.lastScheduleSearch&&now.getTime()-state.lastScheduleSearch<3600000)return;
+ const schedule=await getJson('https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/teams/13/schedule');
+ if(!Array.isArray(schedule.events))throw Error('Lakers schedule is not available yet');
+ const today=localDay(now);
+ const next=schedule.events.filter(event=>{
+  const status=event.status||event.competitions?.[0]?.status;
+  return Number.isFinite(Date.parse(event.date))&&localDay(new Date(event.date))>=today&&
+   event.id!==state.game?.id&&!status?.type?.completed&&
+   !/cancel|postpon/i.test(status?.type?.name||'');
+ }).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date))[0];
+ state.lastScheduleSearch=now.getTime();
+ if(!next){state.nextGameStatus='Waiting for the next Lakers game to be scheduled.';return;}
+ state.gameDate=localDay(new Date(next.date));
+ state.game={id:next.id,name:next.name,status:'Next Lakers game',score:'Tipoff '+new Date(next.date).toLocaleString('en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' Pacific',leaders:[]};
+ state.gameComplete=false;state.lastGame=0;delete state.nextGameStatus;
+}
 export async function checkFeeds(state,gameDate,now,getJson) {
  if(!/^\d{4}-\d{2}-\d{2}$/.test(gameDate)||Number.isNaN(Date.parse(gameDate)))throw Error('Choose a valid game date');
- if(state.gameDate!==gameDate){state.gameDate=gameDate;state.game=null;state.gameComplete=false;state.lastGame=0;}
+ if(state.gameDate!==gameDate){state.gameDate=gameDate;state.game=null;state.gameComplete=false;state.lastGame=0;state.lastScheduleSearch=0;}
  if(!state.lastWeather||now.getTime()-state.lastWeather>=55000){
   try{
    const data=await getJson('https://api.open-meteo.com/v1/forecast?latitude=33.72&longitude=-118&current=temperature_2m&temperature_unit=fahrenheit&timezone=America%2FLos_Angeles');
    recordWeather(state,data,now);delete state.errors.weather;
   }catch(e){state.errors.weather=e.message;}
  }
+ if(state.gameComplete){
+  try{await advanceGame(state,now,getJson);delete state.errors.basketball;}
+  catch(e){state.errors.basketball=e.message;}
+ }
  if(!state.gameComplete&&(!state.lastGame||now.getTime()-state.lastGame>=14000)){
   try{
-   const board=await getJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${gameDate.replaceAll('-','')}`);
+   const board=await getJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${state.gameDate.replaceAll('-','')}`);
    const event=board.events?.find(e=>e.competitions?.[0]?.competitors?.some(t=>t.team.abbreviation==='LAL'));
-   if(!event){state.game={status:'No Lakers game found for this date. The feed may not be available yet.'};}
+   if(!event){
+    if(state.gameDate<=localDay(now))await advanceGame(state,now,getJson);
+    else state.game={...state.game,status:'Waiting for the next Lakers game feed.'};
+   }
    else if(event.status?.type?.state==='pre'){
     state.game={id:event.id,name:event.name,status:event.status.type.detail,score:'Tipoff '+new Date(event.date).toLocaleString('en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' Pacific',leaders:[]};
    }else{
     const summary=await getJson(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${event.id}`);
     recordGame(state,event,summary,now);
+    if(state.gameComplete)state.lastScheduleSearch=0;
    }
    state.lastGame=now.getTime();delete state.errors.basketball;
   }catch(e){state.errors.basketball=e.message;}

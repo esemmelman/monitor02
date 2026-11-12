@@ -73,6 +73,11 @@ Deno.serve(async(request:Request)=>{
    if(state.lastTick&&now.getTime()-state.lastTick<10000)return reply({state,schedule:publicSchedule(),emailConfigured:true});
    state.lastTick=now.getTime();
    await checkFeeds(state,String(schedule.game_date),now,getJson);
+   if(state.gameDate!==String(schedule.game_date)){
+    const {data:updated,error}=await db.from('monitor02_schedule').update({game_date:state.gameDate}).eq('id',true).eq('game_date',schedule.game_date).select('game_date').maybeSingle();
+    if(error)throw Error('Unable to save the next Lakers game date');
+    if(updated)schedule.game_date=updated.game_date;
+   }
    queue(state,'background-enabled-v1','Monitor02 background monitoring is enabled',`Weather alerts for Huntington Beach 92647 are now enabled. Checks run about once a minute, even with the webpage closed and your computer off.\n\nAlerts go to ${recipient} for changes of at least 1°F and include the day's readings recorded so far. Lakers quarter and overtime score alerts are enabled for ${schedule.game_date}, with both teams' points, rebounds and assists leaders.\n\nDashboard and pause control: https://esemmelman.github.io/monitor02/\n\nCurrent temperature: ${state.weather?.temp??'awaiting weather feed'}°F.`,now);
   }
   // Save exact email payloads before sending, so retries use the same Resend idempotency key and content.

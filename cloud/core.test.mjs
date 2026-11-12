@@ -1,8 +1,32 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialState,recordWeather,recordGame,checkFeeds,temperatureEmail} from './core.mjs';
+import {initialState,recordWeather,recordGame,checkFeeds,temperatureEmail,advanceGame} from './core.mjs';
 const time=new Date('2026-11-11T18:00:00Z');
 const weather=(temp,t='2026-11-11T10:00')=>({current:{temperature_2m:temp,time:t}});
+
+test('completed game advances to earliest unfinished game using Pacific dates and keeps queued finals',async()=>{
+ const s=initialState({gameDate:'2026-11-10',gameComplete:true,game:{id:'old'},outbox:[{id:'game:old:4'}],weatherEmailsEnabled:false,lastWeather:time.getTime()});
+ const event=(id,date,completed=false)=>({id,date,name:id,competitions:[{status:{type:{completed,state:completed?'post':'pre'}}}]});
+ const get=async url=>url.includes('/schedule')?{events:[event('later','2026-11-15T04:00Z'),event('old','2026-11-11T20:00Z'),event('done','2026-11-11T19:00Z',true),event('next','2026-11-12T03:00Z')]}:{events:[]};
+ await checkFeeds(s,'2026-11-10',time,get);
+ assert.equal(s.gameDate,'2026-11-11');assert.equal(s.game.id,'next');assert.equal(s.gameComplete,false);
+ assert.deepEqual(s.outbox,[{id:'game:old:4'}]);assert.equal(s.weatherEmailsEnabled,false);
+});
+
+test('missing future schedule retries hourly without resetting the completed game',async()=>{
+ const s=initialState({gameComplete:true,game:{id:'old'}});let calls=0;
+ const get=async()=>{calls++;return {events:[]}};
+ await advanceGame(s,time,get);await advanceGame(s,new Date(time.getTime()+60000),get);
+ assert.equal(calls,1);assert.equal(s.gameComplete,true);assert.match(s.nextGameStatus,/Waiting/);
+ await advanceGame(s,new Date(time.getTime()+3600000),get);assert.equal(calls,2);
+});
+
+test('in-progress game across Pacific midnight remains selected until final',async()=>{
+ const s=initialState({gameDate:'2026-11-10',gameComplete:false,lastWeather:time.getTime()});
+ const get=async url=>{assert(!url.includes('/schedule'));return url.includes('/summary')?{header:{competitions:[{status:{period:5,type:{state:'in',completed:false}},competitors:[{team:{displayName:'Lakers'},linescores:[]},{team:{displayName:'Suns'},linescores:[]}]}]}}:{events:[{id:'live',status:{type:{state:'in'}},competitions:[{competitors:[{team:{abbreviation:'LAL'}}]}]}]}};
+ await checkFeeds(s,'2026-11-10',time,get);
+ assert.equal(s.gameDate,'2026-11-10');assert.equal(s.gameComplete,false);
+});
 
 test('temperature pause drops pending weather mail and preserves Lakers mail',()=>{
  const s=initialState({weatherEmailsEnabled:false,outbox:[{id:'weather:old'},{id:'game:123:1'}]});
