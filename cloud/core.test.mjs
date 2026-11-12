@@ -32,10 +32,10 @@ test('Pacific midnight clears history and sets a new baseline without a false al
  recordWeather(s,weather(55,'2026-11-12T00:00'),new Date('2026-11-12T08:00:00Z'));
  assert.equal(s.history.length,1);assert.equal(s.baseline,55);assert.equal(s.outbox.length,0);
 });
-test('game catchup preserves quarter score, labels later leaders and does not resend accepted emails',()=>{
+test('game catchup preserves quarter score, formats the lead and does not resend accepted emails',()=>{
  const s=initialState();const e={id:'123',name:'Lakers at Bucks'};
  const summary={header:{competitions:[{status:{period:2,displayClock:'10:00',type:{detail:'2nd Quarter'}},competitors:[{id:'1',team:{displayName:'Lakers'},score:'34',linescores:[{value:30},{value:4}]},{id:'2',team:{displayName:'Bucks'},score:'29',linescores:[{value:25},{value:4}]}]}]},boxscore:{players:[]}};
- recordGame(s,e,summary,time);assert.equal(s.outbox.length,1);assert.match(s.outbox[0].subject,/Lakers 30 • Bucks 25/);assert.match(s.outbox[0].text,/Catch-up/);
+ recordGame(s,e,summary,time);assert.equal(s.outbox.length,1);assert.equal(s.outbox[0].subject,'1st Quarter - Lakers 30 - Bucks 25');assert.match(s.outbox[0].text,/^The Lakers are up by 5 points[.]/);
  s.sentIds.push(s.outbox[0].id);s.outbox=[];recordGame(s,e,summary,time);assert.equal(s.outbox.length,0);
 });
 test('feed failures stay independent and successful weather checks are throttled',async()=>{
@@ -46,5 +46,20 @@ test('feed failures stay independent and successful weather checks are throttled
 test('scoreboard period is retained when summary provides only status type',()=>{
  const s=initialState();const event={id:'456',status:{period:1,displayClock:'0:00',type:{detail:'End of 1st'}},competitions:[{competitors:[{id:'1',linescores:[{value:26}]},{id:'2',linescores:[{value:24}]}]}]};
  recordGame(s,event,{header:{competitions:[{status:{type:{detail:'End of 1st'}},competitors:[{id:'1',team:{displayName:'Lakers'},score:'26'},{id:'2',team:{displayName:'Bucks'},score:'24'}]}]},boxscore:{players:[]}},time);
- assert.equal(s.outbox.length,1);assert.match(s.outbox[0].subject,/Lakers 26 • Bucks 24/);
+ assert.equal(s.outbox.length,1);assert.match(s.outbox[0].subject,/Lakers 26 - Bucks 24/);
+});
+
+test('emails put Lakers first for deficits, ties, every quarter and overtime',()=>{
+ for(const [q,label] of [[1,'1st Quarter'],[2,'2nd Quarter'],[3,'3rd Quarter'],[4,'4th Quarter'],[5,'Overtime 1']]){
+  for(const [score,opening] of [[24,'The Lakers are down by 1 point.'],[25,'The Lakers are tied.'],[27,'The Lakers are up by 2 points.']]){
+   const s=initialState();
+   recordGame(s,{id:'format'},{header:{competitions:[{status:{period:q,type:{completed:true}},competitors:[
+    {id:'mil',team:{displayName:'Milwaukee Bucks'},linescores:Array.from({length:q},()=>({value:25}))},
+    {id:'lal',team:{abbreviation:'LAL',displayName:'Los Angeles Lakers'},linescores:Array.from({length:q},(_,i)=>({value:i===0?score:25}))}
+   ]}]},boxscore:{players:[]}},time);
+   const email=s.outbox.at(-1);
+   assert.equal(email.subject,`${label} - Lakers ${score+25*(q-1)} - Milwaukee Bucks ${25*q}`);
+   assert.equal(email.text,`${opening}\n\nPlayer statistics are not available from the feed yet.`);
+  }
+ }
 });

@@ -50,23 +50,24 @@ export function recordGame(state,event,summary,now) {
  const gameLeaders=leaders(summary.boxscore?.players||[]);
  state.game={id:event.id,name:event.name,status:status.type?.detail||status.type?.description,
   score:teams.map(t=>`${t.team.displayName} ${t.score??'—'}`).join(' • '),leaders:gameLeaders,checked:now.toISOString()};
- const period=Number(status.period||0),finished=completedPeriods(status);
+ const finished=completedPeriods(status);
+ const lakers=teams.find(t=>t.team.abbreviation==='LAL'||/lakers/i.test(t.team.displayName));
+ if(!lakers)throw Error('Lakers team missing from game summary');
+ const opponent=teams.find(t=>t!==lakers);
  for(let q=1;q<=finished;q++){
-  const scores=teams.map(t=>{
+  const scores=[lakers,opponent].map(t=>{
    const lines=t.linescores||event.competitions?.[0]?.competitors?.find(e=>e.id===t.id)?.linescores||[];
    if(lines.length<q)return null;
    const values=lines.slice(0,q).map(x=>Number(x.value??x.displayValue));
    if(values.some(x=>!Number.isFinite(x)))return null;
-   return `${t.team.displayName} ${values.reduce((a,b)=>a+b,0)}`;
+   return values.reduce((a,b)=>a+b,0);
   });
   if(scores.some(x=>x===null))continue;
-  // Even during the next quarter, stats may already include new plays. Never label those as quarter-end leaders.
-  const catchup=period>q;
-  const label=q<=4?`quarter ${q}`:`overtime ${q-4}`;
-  queue(state,`game:${event.id}:${q}`,`Lakers — end of ${label}: ${scores.join(' • ')}`,
-   `Score at end of ${label}: ${scores.join(' • ')}\n\n`+
-   (catchup?'Catch-up: the leaders below are current at retrieval and may include subsequent play; historical quarter-end leaders are unavailable.':'Game-to-date leaders at retrieval near the period boundary. The data provider may lag live play.')+
-   `\n\n${gameLeaders.length?gameLeaders.join('\n\n'):'Player statistics are not available from the feed yet.'}\n\nRetrieved: ${now.toISOString()}\nSource: ESPN.`,now);
+  const label=q<=4?`${['1st','2nd','3rd','4th'][q-1]} Quarter`:`Overtime ${q-4}`;
+  const margin=scores[0]-scores[1];
+  const opening=margin===0?'The Lakers are tied.':`The Lakers are ${margin>0?'up':'down'} by ${Math.abs(margin)} ${Math.abs(margin)===1?'point':'points'}.`;
+  queue(state,`game:${event.id}:${q}`,`${label} - Lakers ${scores[0]} - ${opponent.team.displayName} ${scores[1]}`,
+   `${opening}\n\n${gameLeaders.length?gameLeaders.join('\n\n'):'Player statistics are not available from the feed yet.'}`,now);
  }
  state.gameComplete=Boolean(status.type?.completed);
 }
