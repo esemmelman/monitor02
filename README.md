@@ -1,5 +1,7 @@
 # Monitor02
 
+Temperature emails can be suspended independently with `weatherEmailsEnabled: false` in the saved monitor state. This suppresses new temperature emails and removes pending temperature emails while preserving Lakers alerts and weather readings. The background schedule must remain enabled for Lakers alerts.
+
 Live dashboard: https://esemmelman.github.io/monitor02/
 
 Temperature emails contain only `The current temperature is 56°`, a blank line, and today's chronological change list such as `6:33 am - 56°`. The list starts with the day's first recorded reading, omits consecutive unchanged temperatures, and uses Pacific observation times (older readings use the provider's Pacific source time). Whole numbers and degree symbols are used throughout.

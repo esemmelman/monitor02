@@ -3,12 +3,14 @@ import {leaders, completedPeriods} from '../logic.mjs';
 export const localDay = date => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 export function initialState(state={}) {
  const normalized={history:[],outbox:[],sent:[],sentIds:[],errors:{},...state};
+ if(normalized.weatherEmailsEnabled===false)normalized.outbox=normalized.outbox.filter(email=>!email.id.startsWith('weather:'));
  if(Number.isFinite(normalized.baseline))normalized.baseline=Math.trunc(normalized.baseline);
  normalized.history=normalized.history.map(reading=>({...reading,temp:Math.trunc(reading.temp)}));
  if(normalized.weather)normalized.weather={...normalized.weather,temp:Math.trunc(normalized.weather.temp)};
  return normalized;
 }
 export function queue(state,id,subject,text,now) {
+ if(state.weatherEmailsEnabled===false&&id.startsWith('weather:'))return;
  if(state.sentIds.includes(id)||state.outbox.some(m=>m.id===id))return;
  state.outbox.push({id,subject,text,created:now.toISOString()});
 }

@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import {initialState,recordWeather,recordGame,checkFeeds,temperatureEmail} from './core.mjs';
 const time=new Date('2026-11-11T18:00:00Z');
 const weather=(temp,t='2026-11-11T10:00')=>({current:{temperature_2m:temp,time:t}});
+
+test('temperature pause drops pending weather mail and preserves Lakers mail',()=>{
+ const s=initialState({weatherEmailsEnabled:false,outbox:[{id:'weather:old'},{id:'game:123:1'}]});
+ recordWeather(s,weather(55),time);
+ recordWeather(s,weather(56,'2026-11-11T10:15'),time);
+ assert.deepEqual(s.outbox,[{id:'game:123:1'}]);
+ assert.equal(s.weather.temp,56);
+ assert.equal(s.weatherEmailsEnabled,false);
+});
 test('decimal changes are ignored, whole-number boundaries alert in either direction',()=>{
  const s=initialState();recordWeather(s,weather(55.2),time);
  recordWeather(s,weather(55.9,'2026-11-11T10:15'),time);assert.equal(s.outbox.length,0);
