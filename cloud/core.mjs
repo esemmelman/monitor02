@@ -1,4 +1,5 @@
 import {leaders, completedPeriods} from '../logic.mjs';
+import {checkUcla} from './ucla.mjs';
 
 export const localDay = date => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 export function initialState(state={}) {
@@ -91,6 +92,7 @@ export async function advanceGame(state,now,getJson) {
  state.gameComplete=false;state.lastGame=0;delete state.nextGameStatus;
 }
 export async function checkFeeds(state,gameDate,now,getJson) {
+ await checkUcla(state,now,getJson,queue);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(gameDate)||Number.isNaN(Date.parse(gameDate)))throw Error('Choose a valid game date');
  if(state.gameDate!==gameDate){state.gameDate=gameDate;state.game=null;state.gameComplete=false;state.lastGame=0;state.lastScheduleSearch=0;}
  if(!state.lastWeather||now.getTime()-state.lastWeather>=55000){

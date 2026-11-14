@@ -1,5 +1,7 @@
 # Monitor02
 
+One-game UCLA football score-change emails are enabled for UCLA vs. Illinois on November 13, 2026 (ESPN event 401858526). The first check sets a baseline; each subsequently observed change to either team's score queues an email through the existing sender and recipient. Checks run every minute, so changes between checks can be combined. Corrections and returns to earlier scores are recorded separately. A final email is sent if the final score is unchanged. Monitoring stops after the final, with a November 15 midnight Pacific cutoff if the feed never marks the game final. Lakers and weather settings remain independent.
+
 Temperature emails can be suspended independently with `weatherEmailsEnabled: false` in the saved monitor state. This suppresses new temperature emails and removes pending temperature emails while preserving Lakers alerts and weather readings. The background schedule must remain enabled for Lakers alerts.
 
 Live dashboard: https://esemmelman.github.io/monitor02/
